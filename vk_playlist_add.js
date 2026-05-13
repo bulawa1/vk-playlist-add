@@ -1,8 +1,8 @@
 // ─── НАСТРОЙКИ ────────────────────────────────────────────────────────────────
 
 const TOKEN       = 'ВАШ_ТОКЕН_СЮДА';
-const OWNER_ID    = 505231621;
-const PLAYLIST_ID = 1;
+const OWNER_ID    = OWNER-ID_СЮДА;
+const PLAYLIST_ID = PLAYLIST-ID_СЮДА;
 const ACCESS_HASH = '';
 
 // Начать с этого трека (если скрипт прервался — поставь номер где остановился)
