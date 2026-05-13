@@ -1,21 +1,31 @@
 // ─── НАСТРОЙКИ ────────────────────────────────────────────────────────────────
 
-const TOKEN       = 'ВАШ_ТОКЕН_СЮДА';
-const OWNER_ID    = OWNER-ID_СЮДА;
-const PLAYLIST_ID = PLAYLIST-ID_СЮДА;
+const TOKEN       = 'ВАШ_ТОКЕН_СЮАД';
+const OWNER_ID    = ВАШ_owner-id_СЮДА;
+const PLAYLIST_ID = ВАШ_playlist-id_СЮДА;
 const ACCESS_HASH = '';
 
-// Начать с этого трека (если скрипт прервался — поставь номер где остановился)
-const START_FROM  = 1;
+// Если скрипт прервался — поставь номер последнего успешного трека
+const START_FROM  = 94;
 
-const VK_API_VERSION = '5.131';
-const DELAY_MS       = 4000;  // 4 сек между треками — капча не должна появляться
-const DELAY_ON_ERROR = 15000; // 15 сек пауза при любой ошибке перед повтором
+const VK_API_VERSION  = '5.131';
+const DELAY_MS        = 2000;   // 2 сек между треками
+const CAPTCHA_WAIT_MS = 3 * 60 * 1000; // 3 минуты ждём когда капча спадёт
 
 // ──────────────────────────────────────────────────────────────────────────────
 
 function sleep(ms) {
   return new Promise(r => setTimeout(r, ms));
+}
+
+// Красивый обратный отсчёт в одну строку
+async function countdown(ms, label) {
+  const total = Math.ceil(ms / 1000);
+  for (let i = total; i > 0; i--) {
+    process.stdout.write(`\r  ⏳ ${label}: ещё ${i} сек...   `);
+    await sleep(1000);
+  }
+  process.stdout.write('\r' + ' '.repeat(50) + '\r');
 }
 
 async function vkCall(method, params = {}) {
@@ -34,24 +44,25 @@ async function vkCall(method, params = {}) {
   return data.response;
 }
 
+// Добавляет трек, при капче — ждёт и повторяет бесконечно
 async function addTrack(track) {
-  try {
-    await vkCall('audio.add', { audio_id: track.id, owner_id: track.owner_id });
-    return { ok: true };
-  } catch (err) {
-    if (err.code === 14) {
-      // Капча — ждём подольше и повторяем один раз
-      process.stdout.write(` ⏳ капча, пауза ${DELAY_ON_ERROR/1000}с...`);
-      await sleep(DELAY_ON_ERROR);
-      try {
-        await vkCall('audio.add', { audio_id: track.id, owner_id: track.owner_id });
-        return { ok: true };
-      } catch (e) {
-        return { ok: false, error: e.message };
+  let attempt = 0;
+  while (true) {
+    try {
+      await vkCall('audio.add', { audio_id: track.id, owner_id: track.owner_id });
+      return { ok: true };
+    } catch (err) {
+      if (err.code === 14) {
+        attempt++;
+        console.log(`\n  🔒 Капча (попытка ${attempt}). Жду 3 минуты пока VK успокоится...`);
+        await countdown(CAPTCHA_WAIT_MS, 'капча');
+        // после паузы пробуем снова (бесконечно)
+      } else if (err.code === 15 || err.code === 201) {
+        return { ok: false, error: 'трек недоступен' };
+      } else {
+        return { ok: false, error: err.message };
       }
     }
-    if (err.code === 15) return { ok: false, error: 'трек недоступен' };
-    return { ok: false, error: err.message };
   }
 }
 
@@ -98,9 +109,12 @@ async function main() {
   }
 
   const startIdx = Math.max(0, START_FROM - 1);
+  const total    = tracks.length - startIdx;
+  const estMin   = Math.round(total * DELAY_MS / 60000);
+
   console.log(`\n🎵 Найдено треков: ${tracks.length}`);
   if (startIdx > 0) console.log(`⏩ Начинаю с трека #${START_FROM}`);
-  console.log(`⏱️  Задержка: ${DELAY_MS / 1000} сек → примерно ${Math.round((tracks.length - startIdx) * DELAY_MS / 60000)} минут`);
+  console.log(`⏱️  ~${estMin} минут без капч (при капче +3 мин на паузу)`);
   console.log('➕ Начинаю добавление...\n');
 
   let added = 0, failed = 0;
@@ -129,7 +143,7 @@ async function main() {
   console.log(`✅ Добавлено:     ${added}`);
   console.log(`❌ Не добавлено: ${failed}`);
   if (errors.length > 0) {
-    console.log('\nНе добавились (можно поставить START_FROM и перезапустить):');
+    console.log('\nНе добавились:');
     for (const e of errors) console.log(`  #${e.num} ${e.label}: ${e.error}`);
   }
   console.log('\n🎉 Готово!');
